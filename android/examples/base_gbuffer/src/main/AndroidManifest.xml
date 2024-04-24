@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="de.saschawillems.vulkanSSAO">
+    package="com.ivanovIvan.vulkanBaseGBuffer">
 
     <application
-        android:label="Vulkan SSAO"
+        android:label="Vulkan BaseGBuffer"
         android:icon="@drawable/icon"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
-        <activity android:name="de.saschawillems.vulkanSample.VulkanActivity"
+        <activity android:name="com.ivanovIvan.vulkanSample.VulkanActivity"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|keyboardHidden">
             <meta-data android:name="android.app.lib_name"

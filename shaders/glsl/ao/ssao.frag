@@ -1,5 +1,7 @@
 #version 450
 
+#include "common.h"
+
 layout (binding = 0) uniform sampler2D samplerPositionDepth;
 layout (binding = 1) uniform sampler2D samplerNormal;
 layout (binding = 2) uniform sampler2D ssaoNoise;
@@ -25,7 +27,7 @@ void main()
 {
 	// Get G-Buffer values
 	vec3 fragPos = texture(samplerPositionDepth, inUV).rgb;
-	vec3 normal = normalize(texture(samplerNormal, inUV).rgb * 2.0 - 1.0);
+	vec3 normal = Decode(texture(samplerNormal, inUV).rg);
 
 	// Get a random vector using a noise lookup
 	ivec2 texDim = textureSize(samplerPositionDepth, 0); 

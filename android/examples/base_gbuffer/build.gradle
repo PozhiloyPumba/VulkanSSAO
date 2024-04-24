@@ -4,7 +4,7 @@ apply from: '../gradle/outputfilename.gradle'
 android {
     compileSdkVersion rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "de.saschawillems.vulkanSSAO"
+        applicationId "com.ivanovIvan.vulkanBaseGBuffer"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -45,11 +45,6 @@ android {
 }
 
 task copyTask {
-    copy {
-        from '../../common/res/drawable'
-        into "src/main/res/drawable"
-        include 'icon.png'
-    }
 
     copy {
         from rootProject.ext.shaderPath + 'glsl/base'
@@ -58,8 +53,8 @@ task copyTask {
     }
 
     copy {
-       from rootProject.ext.shaderPath + 'glsl/ssao'
-       into 'assets/shaders/glsl/ssao'
+       from rootProject.ext.shaderPath + 'glsl/base_gbuffer'
+       into 'assets/shaders/glsl/base_gbuffer'
        include '*.*'
     }
 

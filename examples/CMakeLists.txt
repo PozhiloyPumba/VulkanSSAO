@@ -83,6 +83,7 @@ endfunction(buildExamples)
 
 set(EXAMPLES
 	ao
+	base_gbuffer
 	ssao
 )
 
