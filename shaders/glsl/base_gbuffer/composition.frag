@@ -2,24 +2,33 @@
 
 #include "common.h"
 
-layout (binding = 0) uniform sampler2D samplerposition;
+layout (binding = 0) uniform sampler2D samplerDepth;
 layout (binding = 1) uniform sampler2D samplerNormal;
 layout (binding = 2) uniform sampler2D samplerAlbedo;
-layout (binding = 5) uniform UBO 
+layout (binding = 3) uniform UBO 
 {
-	mat4 _dummy;
-	int ao;
-	int aoOnly;
-	int aoBlur;
-} uboParams;
+	mat4 projection;
+} ubo;
 
 layout (location = 0) in vec2 inUV;
 
 layout (location = 0) out vec4 outFragColor;
 
+vec3 ViewPosFromDepth(float depth) {
+    float z = depth * 2.0 - 1.0;
+
+    vec4 clipSpacePosition = vec4(inUV * 2.0 - 1.0, z, 1.0);
+    vec4 viewSpacePosition = inverse(ubo.projection) * clipSpacePosition;
+
+    // Perspective division
+    viewSpacePosition /= viewSpacePosition.w;
+
+    return viewSpacePosition.xyz;
+}
+
 void main() 
 {
-	vec3 fragPos = texture(samplerposition, inUV).rgb;
+	vec3 fragPos = ViewPosFromDepth(texture(samplerDepth, inUV).r);
 	vec3 normal = Decode(texture(samplerNormal, inUV).rg);
 	vec4 albedo = texture(samplerAlbedo, inUV);
 

@@ -23,23 +23,6 @@ layout (location = 0) in vec2 inUV;
 
 layout (location = 0) out float outFragColor;
 
-vec3 ViewPosFromDepth(float depth) {
-    // vec4 clipSpacePosition = vec4(inUV * 2.0 - 1.0, depth, 1.0);
-    // vec4 viewSpacePosition = ubo.invProjection * clipSpacePosition;
-
-    // // Perspective division
-    // viewSpacePosition /= viewSpacePosition.w;
-
-	// for less computations
-	vec3 viewSpacePosition = vec3((inUV * 2.f - 1.f) * vec2(ubo.invProjection[0][0], 
-										ubo.invProjection[1][1]), -1.f);
-
-    // Perspective division
-	viewSpacePosition /= depth * ubo.invProjection[2][3] + ubo.invProjection[3][3];
-
-    return viewSpacePosition.xyz;
-}
-
 float linearDepth (float depth) {
 	return 1.f / (ubo.invProjection[3][3] + ubo.invProjection[2][3] * depth);
 }
@@ -47,7 +30,7 @@ float linearDepth (float depth) {
 void main() 
 {
 	// Get G-Buffer values
-	vec3 fragPos = ViewPosFromDepth(texture(samplerDepth, inUV).r);
+	vec3 fragPos = ViewPosFromDepth(ubo.invProjection, inUV, texture(samplerDepth, inUV).r);
 	vec3 normal = Decode(texture(samplerNormal, inUV).rg);
 
 	// Get a random vector using a noise lookup

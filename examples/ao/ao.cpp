@@ -41,7 +41,7 @@ public:
 	} uboSSAOParams;
 
 	struct UBOBlurParams {
-		int32_t depthCheck = false;
+		int32_t depthCheck = true;
 		float depthRange = 0.001;
 		float nearPlane = 0.1f;
 		float farPlane = 64.0f;

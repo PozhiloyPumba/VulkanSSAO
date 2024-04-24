@@ -25,4 +25,21 @@ vec3 Decode( vec2 f )
     return normalize( n );
 }
 
+vec3 ViewPosFromDepth(mat4 invProj, vec2 inUV, float depth) {
+    // vec4 clipSpacePosition = vec4(inUV * 2.0 - 1.0, depth, 1.0);
+    // vec4 viewSpacePosition = invProj * clipSpacePosition;
+
+    // // Perspective division
+    // viewSpacePosition /= viewSpacePosition.w;
+
+	// for less computations
+	vec3 viewSpacePosition = vec3((inUV * 2.f - 1.f) * vec2(invProj[0][0], 
+										invProj[1][1]), -1.f);
+
+    // Perspective division
+	viewSpacePosition /= depth * invProj[2][3] + invProj[3][3];
+
+    return viewSpacePosition.xyz;
+}
+
 #endif

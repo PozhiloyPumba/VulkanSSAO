@@ -12,7 +12,6 @@
 class VulkanExample : public VulkanExampleBase
 {
 public:
-	vks::Texture2D ssaoNoise;
 	vkglTF::Model scene;
 
 	struct UBOSceneParams {
@@ -79,7 +78,7 @@ public:
 
 	struct {
 		struct Offscreen : public FrameBuffer {
-			FrameBufferAttachment position, normal, albedo, depth;
+			FrameBufferAttachment normal, albedo, depth;
 		} offscreen;
 	} frameBuffers{};
 
@@ -88,7 +87,7 @@ public:
 
 	VulkanExample() : VulkanExampleBase()
 	{
-		title = "Ambient occlusion";
+		title = "Base GBuffer";
 		camera.type = Camera::CameraType::firstperson;
 #ifndef __ANDROID__
 		camera.rotationSpeed = 0.25f;
@@ -105,7 +104,6 @@ public:
 			vkDestroySampler(device, colorSampler, nullptr);
 
 			// Attachments 
-			frameBuffers.offscreen.position.destroy(device);
 			frameBuffers.offscreen.normal.destroy(device);
 			frameBuffers.offscreen.albedo.destroy(device);
 			frameBuffers.offscreen.depth.destroy(device);
@@ -124,8 +122,6 @@ public:
 
 			// Uniform buffers
 			uniformBuffers.sceneParams.destroy();
-
-			ssaoNoise.destroy();
 		}
 	}
 
@@ -169,7 +165,8 @@ public:
 		image.arrayLayers = 1;
 		image.samples = VK_SAMPLE_COUNT_1_BIT;
 		image.tiling = VK_IMAGE_TILING_OPTIMAL;
-		image.usage = usage | VK_IMAGE_USAGE_SAMPLED_BIT;
+		image.usage = usage | VK_IMAGE_USAGE_SAMPLED_BIT | 
+			((usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)? VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT: 0);
 
 		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
 		VkMemoryRequirements memReqs;
@@ -196,15 +193,6 @@ public:
 
 	void prepareOffscreenFramebuffers()
 	{
-		// Attachments
-#if defined(__ANDROID__)
-		const uint32_t ssaoWidth = width / 2;
-		const uint32_t ssaoHeight = height / 2;
-#else
-		const uint32_t ssaoWidth = width;
-		const uint32_t ssaoHeight = height;
-#endif
-
 		frameBuffers.offscreen.setSize(width, height);
 
 		// Find a suitable depth format
@@ -213,7 +201,6 @@ public:
 		assert(validDepthFormat);
 
 		// G-Buffer
-		createAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &frameBuffers.offscreen.position, width, height);	// Position + Depth
 		createAttachment(VK_FORMAT_R16G16_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &frameBuffers.offscreen.normal, width, height);			// Normals
 		createAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &frameBuffers.offscreen.albedo, width, height);			// Albedo (color)
 		createAttachment(attDepthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, &frameBuffers.offscreen.depth, width, height);			// Depth
@@ -223,7 +210,7 @@ public:
 
 		// G-Buffer creation
 		{
-			std::array<VkAttachmentDescription, 4> attachmentDescs = {};
+			std::array<VkAttachmentDescription, 3> attachmentDescs = {};
 
 			// Init attachment properties
 			for (uint32_t i = 0; i < static_cast<uint32_t>(attachmentDescs.size()); i++)
@@ -233,22 +220,20 @@ public:
 				attachmentDescs[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 				attachmentDescs[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 				attachmentDescs[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-				attachmentDescs[i].finalLayout = (i == 3) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				attachmentDescs[i].finalLayout = (i == 2) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			}
 
 			// Formats
-			attachmentDescs[0].format = frameBuffers.offscreen.position.format;
-			attachmentDescs[1].format = frameBuffers.offscreen.normal.format;
-			attachmentDescs[2].format = frameBuffers.offscreen.albedo.format;
-			attachmentDescs[3].format = frameBuffers.offscreen.depth.format;
+			attachmentDescs[0].format = frameBuffers.offscreen.normal.format;
+			attachmentDescs[1].format = frameBuffers.offscreen.albedo.format;
+			attachmentDescs[2].format = frameBuffers.offscreen.depth.format;
 
 			std::vector<VkAttachmentReference> colorReferences;
 			colorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
 			colorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-			colorReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
 
 			VkAttachmentReference depthReference = {};
-			depthReference.attachment = 3;
+			depthReference.attachment = 2;
 			depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 			VkSubpassDescription subpass = {};
@@ -286,11 +271,10 @@ public:
 			renderPassInfo.pDependencies = dependencies.data();
 			VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &frameBuffers.offscreen.renderPass));
 
-			std::array<VkImageView, 4> attachments;
-			attachments[0] = frameBuffers.offscreen.position.view;
-			attachments[1] = frameBuffers.offscreen.normal.view;
-			attachments[2] = frameBuffers.offscreen.albedo.view;
-			attachments[3] = frameBuffers.offscreen.depth.view;
+			std::array<VkImageView, 3> attachments;
+			attachments[0] = frameBuffers.offscreen.normal.view;
+			attachments[1] = frameBuffers.offscreen.albedo.view;
+			attachments[2] = frameBuffers.offscreen.depth.view;
 
 			VkFramebufferCreateInfo fbufCreateInfo = vks::initializers::framebufferCreateInfo();
 			fbufCreateInfo.renderPass = frameBuffers.offscreen.renderPass;
@@ -333,16 +317,12 @@ public:
 		{
 			VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
 
-			/*
-				Offscreen SSAO generation
-			*/
 			{
 				// Clear values for all attachments written in the fragment shader
-				std::vector<VkClearValue> clearValues(4);
+				std::vector<VkClearValue> clearValues(3);
 				clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 				clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-				clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-				clearValues[3].depthStencil = { 1.0f, 0 };
+				clearValues[2].depthStencil = { 1.0f, 0 };
 
 				VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
 				renderPassBeginInfo.renderPass = frameBuffers.offscreen.renderPass;
@@ -353,7 +333,7 @@ public:
 				renderPassBeginInfo.pClearValues = clearValues.data();
 
 				/*
-					First pass: Fill G-Buffer components (positions+depth, normals, albedo) using MRT
+					First pass: Fill G-Buffer components (normals, albedo) using MRT
 				*/
 
 				vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -371,10 +351,6 @@ public:
 
 				vkCmdEndRenderPass(drawCmdBuffers[i]);
 			}
-
-			/*
-				Note: Explicit synchronization is not required between the render pass, as this is done implicit via sub pass dependencies
-			*/
 
 			/*
 				Final render pass: Scene rendering with applied radial blur
@@ -449,23 +425,25 @@ public:
 
 		// Composition
 		setLayoutBindings = {
-			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0),						// FS Position+Depth
+			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0),						// FS Depth
 			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1),						// FS Normals
 			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2),						// FS Albedo
+			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 3),								// FS Lights UBO
 		};
 		setLayoutCreateInfo = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings.data(), static_cast<uint32_t>(setLayoutBindings.size()));
 		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &setLayoutCreateInfo, nullptr, &descriptorSetLayouts.composition));
 		descriptorAllocInfo.pSetLayouts = &descriptorSetLayouts.composition;
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorAllocInfo, &descriptorSets.composition));
 		imageDescriptors = {
-			vks::initializers::descriptorImageInfo(colorSampler, frameBuffers.offscreen.position.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+			vks::initializers::descriptorImageInfo(colorSampler, frameBuffers.offscreen.depth.view, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL),
 			vks::initializers::descriptorImageInfo(colorSampler, frameBuffers.offscreen.normal.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 			vks::initializers::descriptorImageInfo(colorSampler, frameBuffers.offscreen.albedo.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 		};
 		writeDescriptorSets = {
-			vks::initializers::writeDescriptorSet(descriptorSets.composition, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &imageDescriptors[0]),			// FS Sampler Position+Depth
+			vks::initializers::writeDescriptorSet(descriptorSets.composition, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &imageDescriptors[0]),			// FS Sampler Depth
 			vks::initializers::writeDescriptorSet(descriptorSets.composition, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &imageDescriptors[1]),			// FS Sampler Normals
 			vks::initializers::writeDescriptorSet(descriptorSets.composition, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &imageDescriptors[2]),			// FS Sampler Albedo
+			vks::initializers::writeDescriptorSet(descriptorSets.composition, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3, &uniformBuffers.sceneParams.descriptor),
 		};
 		vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 	}
@@ -525,8 +503,7 @@ public:
 		// Blend attachment states required for all color attachments
 		// This is important, as color write mask will otherwise be 0x0 and you
 		// won't see anything rendered to the attachment
-		std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachmentStates = {
-			vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE),
+		std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachmentStates = {
 			vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE),
 			vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE)
 		};
