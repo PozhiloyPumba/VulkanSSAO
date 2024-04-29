@@ -83,6 +83,7 @@ endfunction(buildExamples)
 
 set(EXAMPLES
 	ao
+	ao_gaussian_blur
 	base_gbuffer
 	ssao
 )

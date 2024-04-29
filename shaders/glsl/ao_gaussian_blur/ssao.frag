@@ -109,7 +109,6 @@ void main()
 		samplePos = fragPos + samplePos * SSAO_RADIUS; 
 		
 		// low computation project
-		// mat4 proj = inverse(ubo.invProjection);
 		// vec4 offset = vec4(samplePos, 1.0f);
 		// offset = proj * offset; 
 		// offset.xyz /= offset.w; 
