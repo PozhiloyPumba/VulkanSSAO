@@ -217,7 +217,6 @@ public:
 		vks::Texture2D &attachment,
 		uint32_t width,
 		uint32_t height,
-		VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED,
 		bool onlyCompute = false)
 	{
 		attachment.width = width;
@@ -254,7 +253,7 @@ public:
 		else {
 			imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			imageCreateInfo.queueFamilyIndexCount = 1;
-			imageCreateInfo.pQueueFamilyIndices = &vulkanDevice->queueFamilyIndices.graphics;
+			imageCreateInfo.pQueueFamilyIndices = &vulkanDevice->queueFamilyIndices.compute;
 		}
 
 		VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &attachment.image));
@@ -270,7 +269,7 @@ public:
 		// Transition image to the general layout, so we can use it as a storage image in the compute shader
 		VkCommandBuffer layoutCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 		attachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-		vks::tools::setImageLayout(layoutCmd, attachment.image, VK_IMAGE_ASPECT_COLOR_BIT, layout, attachment.imageLayout);
+		vks::tools::setImageLayout(layoutCmd, attachment.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, attachment.imageLayout);
 		vulkanDevice->flushCommandBuffer(layoutCmd, queue, true);
 
 		// Create image view
@@ -285,21 +284,7 @@ public:
 		// Initialize a descriptor for later use
 		attachment.descriptor.imageLayout = attachment.imageLayout;
 		attachment.descriptor.imageView = attachment.view;
-
-		VkSamplerCreateInfo sampler = vks::initializers::samplerCreateInfo();
-		sampler.magFilter = VK_FILTER_NEAREST;
-		sampler.minFilter = VK_FILTER_NEAREST;
-		sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		sampler.addressModeV = sampler.addressModeU;
-		sampler.addressModeW = sampler.addressModeU;
-		sampler.mipLodBias = 0.0f;
-		sampler.maxAnisotropy = 1.0f;
-		sampler.minLod = 0.0f;
-		sampler.maxLod = 1.0f;
-		sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &attachment.sampler));
-		attachment.descriptor.sampler = attachment.sampler;
+		attachment.sampler = VK_NULL_HANDLE;
 		attachment.device = vulkanDevice;
 	}
 
@@ -310,7 +295,7 @@ public:
 		VkFormat format = VK_FORMAT_R8_UNORM;
 
 		createStorageImage(format, VK_IMAGE_USAGE_SAMPLED_BIT, compute.ssao, ssaoWidth, ssaoHeight);
-		createStorageImage(format, VK_IMAGE_USAGE_SAMPLED_BIT, compute.blurHorizontal, ssaoWidth, ssaoHeight);
+		createStorageImage(format, VK_IMAGE_USAGE_SAMPLED_BIT, compute.blurHorizontal, ssaoWidth, ssaoHeight, true);
 		createStorageImage(format, VK_IMAGE_USAGE_SAMPLED_BIT, compute.blurVertical, ssaoWidth, ssaoHeight);
 
 		// Get a compute queue from the device
@@ -616,7 +601,6 @@ public:
 
 			VkImageMemoryBarrier barrier{};
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.image = compute.ssao.image;
 			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.subresourceRange.baseArrayLayer = 0;
@@ -624,36 +608,87 @@ public:
 			barrier.subresourceRange.levelCount = 1;
 			barrier.subresourceRange.baseMipLevel = 0;
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+			std::vector<VkImageMemoryBarrier> barriers(2, barrier);
+			barriers[0].image = compute.ssao.image;
+			barriers[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			barriers[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			barriers[0].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+			barriers[1].image = compute.blurVertical.image;
+			barriers[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			barriers[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[1].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			barriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+			vkCmdPipelineBarrier(compute.commandBuffer,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				2, barriers.data()
+			);
 
 			vkCmdDispatch(compute.commandBuffer, compute.ssao.width / 8, compute.ssao.height / 8, 1);
 
-			// vkCmdPipelineBarrier(compute.commandBuffer,
-			// 	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
-			// 	0, nullptr,
-			// 	0, nullptr,
-			// 	1, &barrier
-			// );
+			barriers[0].image = compute.blurHorizontal.image;
+			barriers[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			barriers[0].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+			barriers[1].image = compute.ssao.image;
+			barriers[1].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barriers[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+			vkCmdPipelineBarrier(compute.commandBuffer,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				2, barriers.data()
+			);
 
 			vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines[compute.BLUR_HORIZONTAL]);
 			vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayouts[compute.BLUR_HORIZONTAL], 0, 1, &compute.descriptorSets[compute.BLUR_HORIZONTAL], 0, 0);
 			vkCmdDispatch(compute.commandBuffer, compute.ssao.width / 8, compute.ssao.height, 1);
 
-			barrier.image = compute.blurHorizontal.image;
+			barriers[0].image = compute.blurHorizontal.image;
+			barriers[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barriers[0].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 
-			// vkCmdPipelineBarrier(compute.commandBuffer,
-			// 	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
-			// 	0, nullptr,
-			// 	0, nullptr,
-			// 	1, &barrier
-			// );
+			vkCmdPipelineBarrier(compute.commandBuffer,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				1, barriers.data()
+			);
 
 			vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines[compute.BLUR_VERTICAL]);
 			vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayouts[compute.BLUR_VERTICAL], 0, 1, &compute.descriptorSets[compute.BLUR_VERTICAL], 0, 0);
 			vkCmdDispatch(compute.commandBuffer, compute.ssao.width, compute.ssao.height / 8, 1);
+
+			barriers[0].image = compute.ssao.image;
+			barriers[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barriers[0].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+			barriers[1].image = compute.blurVertical.image;
+			barriers[1].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barriers[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+			vkCmdPipelineBarrier(compute.commandBuffer,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				2, barriers.data()
+			);
 
 			vkEndCommandBuffer(compute.commandBuffer);
 		}
@@ -768,8 +803,8 @@ public:
 			vks::initializers::descriptorImageInfo(colorSampler, graphic.offscreen.frameBufferAttachments[graphic.offscreen.DEPTH].view, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL),
 			vks::initializers::descriptorImageInfo(colorSampler, graphic.offscreen.frameBufferAttachments[graphic.offscreen.NORMAL].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 			vks::initializers::descriptorImageInfo(colorSampler, graphic.offscreen.frameBufferAttachments[graphic.offscreen.ALBEDO].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-			vks::initializers::descriptorImageInfo(compute.ssao.sampler, compute.ssao.view, VK_IMAGE_LAYOUT_GENERAL),
-			vks::initializers::descriptorImageInfo(compute.blurVertical.sampler, compute.blurVertical.view, VK_IMAGE_LAYOUT_GENERAL),
+			vks::initializers::descriptorImageInfo(linearSampler, compute.ssao.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+			vks::initializers::descriptorImageInfo(linearSampler, compute.blurVertical.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 		};
 		writeDescriptorSets = {
 			vks::initializers::writeDescriptorSet(graphic.descriptorSets[graphic.COMPOSITION], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &imageDescriptors[0]),			// FS Sampler Depth

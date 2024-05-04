@@ -16,7 +16,7 @@ def findGlslang():
     if args.glslang != None and isExe(args.glslang):
         return args.glslang
 
-    exe_name = "glslc"
+    exe_name = "glslangValidator"
     if os.name == "nt":
         exe_name += ".exe"
 
@@ -43,7 +43,7 @@ for root, dirs, files in os.walk(dir_path):
             if file.endswith(".rgen") or file.endswith(".rchit") or file.endswith(".rmiss"):
                add_params = add_params + " --target-env vulkan1.2"
 
-            res = subprocess.call("%s %s -o %s %s" % (glslang_path, input_file, output_file, add_params), shell=True)
+            res = subprocess.call("%s -V %s -o %s %s" % (glslang_path, input_file, output_file, add_params), shell=True)
             # res = subprocess.call([glslang_path, '-V', input_file, '-o', output_file, add_params], shell=True)
             if res != 0:
                 sys.exit()
