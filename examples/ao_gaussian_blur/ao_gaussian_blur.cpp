@@ -122,7 +122,7 @@ public:
 
 	VulkanExample() : VulkanExampleBase()
 	{
-		title = "Ambient occlusion";
+		title = "Gaussian blur AO";
 		camera.type = Camera::CameraType::firstperson;
 #ifndef __ANDROID__
 		camera.rotationSpeed = 0.25f;

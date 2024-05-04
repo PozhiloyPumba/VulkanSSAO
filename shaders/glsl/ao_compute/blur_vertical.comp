@@ -1,0 +1,52 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+
+#include "common_blur.h"
+
+layout (binding = 0, r8) uniform readonly image2D ssao;
+layout (binding = 1, r8) uniform writeonly image2D ssaoBlured;
+
+// layout (binding = 2) uniform UBO 
+// {
+// 	int depth_check;
+// 	float depth_range;
+// 	float nearPlane;
+// 	float farPlane;
+// 	int useLerpTrick;
+// } ubo;
+
+layout (local_size_x = 1, local_size_y = 8, local_size_z = 1) in;
+
+// read to shared memory local_size_y + 2 * (KERNEL_SIZE - 1)
+// 2 pixels each thread
+shared float sharedData[16];
+
+// ----********----
+void main() 
+{
+	int size = imageSize(ssao).y - 1;
+	sharedData[gl_LocalInvocationID.y * 2] = 
+		imageLoad(ssao, ivec2(gl_GlobalInvocationID.x, clamp(gl_GlobalInvocationID.y + gl_LocalInvocationID.y - 4, 0, size))).r;
+	sharedData[gl_LocalInvocationID.y * 2 + 1] = 
+		imageLoad(ssao, ivec2(gl_GlobalInvocationID.x, clamp(gl_GlobalInvocationID.y + gl_LocalInvocationID.y - 3, 0, size))).r;
+
+	// sync
+	barrier();
+
+	float result = sharedData[gl_LocalInvocationID.y + KERNEL_SIZE - 1] * weight_0;
+	
+	vec4 right = vec4(sharedData[gl_LocalInvocationID.y + KERNEL_SIZE], 
+					  sharedData[gl_LocalInvocationID.y + KERNEL_SIZE + 1], 
+					  sharedData[gl_LocalInvocationID.y + KERNEL_SIZE + 2], 
+					  sharedData[gl_LocalInvocationID.y + KERNEL_SIZE + 3]);
+
+	vec4 left = vec4(sharedData[gl_LocalInvocationID.y + KERNEL_SIZE - 2], 
+					 sharedData[gl_LocalInvocationID.y + KERNEL_SIZE - 3], 
+					 sharedData[gl_LocalInvocationID.y + KERNEL_SIZE - 4], 
+					 sharedData[gl_LocalInvocationID.y + KERNEL_SIZE - 5]);
+
+	result += dot(right, weights);
+	result += dot(left, weights);
+
+	imageStore(ssaoBlured, ivec2(gl_GlobalInvocationID.xy), vec4(result, 0.f, 0.f, 0.f));
+}
