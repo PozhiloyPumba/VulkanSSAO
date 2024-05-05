@@ -9,6 +9,7 @@
 #include "vulkanexamplebase.h"
 #include "VulkanglTFModel.h"
 #include <array>
+#include "../config.hpp"
 
 #define SSAO_RADIUS 0.3f
 
@@ -141,9 +142,9 @@ public:
 #ifndef __ANDROID__
 		camera.rotationSpeed = 0.25f;
 #endif
-		camera.position = { 1.0f, 0.75f, 0.0f };
+		camera.position = conf.position;
 		camera.setMovementSpeed(5.0f);
-		camera.setRotation(glm::vec3(0.0f, 90.0f, 0.0f));
+		camera.setRotation(conf.rotation);
 		camera.setPerspective(60.0f, (float)width / (float)height, uboSceneParams.nearPlane, uboSceneParams.farPlane);
 	}
 
@@ -501,7 +502,7 @@ public:
 	{
 		vkglTF::descriptorBindingFlags  = vkglTF::DescriptorBindingFlags::ImageBaseColor;
 		const uint32_t gltfLoadingFlags = vkglTF::FileLoadingFlags::FlipY | vkglTF::FileLoadingFlags::PreTransformVertices;
-		scene.loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, gltfLoadingFlags);
+		scene.loadFromFile(getAssetPath() + conf.name, vulkanDevice, queue, gltfLoadingFlags);
 	}
 
 	void buildCommandBuffers()
@@ -1045,6 +1046,9 @@ public:
 		updateUniformBufferSSAOParams();
 		updateUniformBufferBlurParams();
 		draw();
+		std::cout << "rot and pos" << std::endl;
+		std::cout << camera.rotation.x << ", " << camera.rotation.y << ", " << camera.rotation.z << std::endl;
+		std::cout << camera.position.x << ", " << camera.position.y << ", " << camera.position.z << std::endl;
 	}
 
 	virtual void OnUpdateUIOverlay(vks::UIOverlay *overlay)

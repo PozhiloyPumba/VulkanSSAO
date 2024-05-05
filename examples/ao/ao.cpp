@@ -8,6 +8,7 @@
 
 #include "vulkanexamplebase.h"
 #include "VulkanglTFModel.h"
+#include "../config.hpp"
 
 #define SSAO_RADIUS 0.3f
 
@@ -33,7 +34,7 @@ public:
 
 	struct UBOBlurParams {
 		int32_t depthCheck = false;
-		float depthRange = 0.001;
+		float depthRange = 0.001f;
 		float nearPlane = 0.1f;
 		float farPlane = 64.0f;
 	} uboBlurParams;
@@ -122,9 +123,9 @@ public:
 #ifndef __ANDROID__
 		camera.rotationSpeed = 0.25f;
 #endif
-		camera.position = { 1.0f, 0.75f, 0.0f };
+		camera.position = conf.position;
 		camera.setMovementSpeed(5.0f);
-		camera.setRotation(glm::vec3(0.0f, 90.0f, 0.0f));
+		camera.setRotation(conf.rotation);
 		camera.setPerspective(60.0f, (float)width / (float)height, uboSceneParams.nearPlane, uboSceneParams.farPlane);
 	}
 
@@ -483,8 +484,7 @@ public:
 	{
 		vkglTF::descriptorBindingFlags  = vkglTF::DescriptorBindingFlags::ImageBaseColor;
 		const uint32_t gltfLoadingFlags = vkglTF::FileLoadingFlags::FlipY | vkglTF::FileLoadingFlags::PreTransformVertices;
-		scene.loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, gltfLoadingFlags);
-		// scene.loadFromFile(getAssetPath() + "models/cat.gltf", vulkanDevice, queue, gltfLoadingFlags);
+		scene.loadFromFile(getAssetPath() + conf.name, vulkanDevice, queue, gltfLoadingFlags);
 	}
 
 	void buildCommandBuffers()
@@ -929,7 +929,7 @@ public:
 			overlay->checkBox("SSAO blur", &uboSSAOParams.ssaoBlur);
 			overlay->checkBox("SSAO pass only", &uboSSAOParams.ssaoOnly);
 			overlay->checkBox("Blur depth check", &uboBlurParams.depthCheck);
-			overlay->inputFloat("Blur depth range", &uboBlurParams.depthRange, 0.0001, 10);
+			overlay->inputFloat("Blur depth range", &uboBlurParams.depthRange, 0.0001f, 10);
 		}
 	}
 };
