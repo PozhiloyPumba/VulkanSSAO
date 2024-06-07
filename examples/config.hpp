@@ -15,7 +15,9 @@ static struct Config {
     {"models/deer.gltf", { -2.46584f, -0.0757071f, -2.06703f }, {1.75f, -51.5f, 0.0f}},
     {"models/oaktree.gltf", { -0.755051f, 0.991626f, -1.88991f }, {-1.5f, -23.75f, 0.0f}},
     {"models/CesiumMan/glTF/CesiumMan.gltf", { -0.755051f, 0.991626f, -1.88991f }, {-1.5f, -23.75f, 0.0f}},
+    {"models/drone/scene.gltf", { -0.755051f, 0.991626f, -1.88991f }, {-1.5f, -23.75f, 0.0f}},
+    {"models/underwater_explorer/underwater_explorer.gltf", { -0.755051f, 0.991626f, -1.88991f }, {-1.5f, -23.75f, 0.0f}}, // validation
 };
 
-static Config conf = config[5];
+static Config conf = config[0];
 #endif

@@ -905,7 +905,7 @@ public:
 		// Create compute shader pipelines
 		VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(compute.pipelineLayouts[compute.SSAO], 0);
 
-		computePipelineCreateInfo.stage = loadShader(getShadersPath() + "ao_compute/ssao.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+		computePipelineCreateInfo.stage = loadShader(getShadersPath() + "ao_compute/ssao_test.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
 		VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &compute.pipelines[compute.SSAO]));
 
 		computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(compute.pipelineLayouts[compute.BLUR_HORIZONTAL], 0);
@@ -1046,9 +1046,9 @@ public:
 		updateUniformBufferSSAOParams();
 		updateUniformBufferBlurParams();
 		draw();
-		std::cout << "rot and pos" << std::endl;
-		std::cout << camera.rotation.x << ", " << camera.rotation.y << ", " << camera.rotation.z << std::endl;
-		std::cout << camera.position.x << ", " << camera.position.y << ", " << camera.position.z << std::endl;
+		// std::cout << "rot and pos" << std::endl;
+		// std::cout << camera.rotation.x << ", " << camera.rotation.y << ", " << camera.rotation.z << std::endl;
+		// std::cout << camera.position.x << ", " << camera.position.y << ", " << camera.position.z << std::endl;
 	}
 
 	virtual void OnUpdateUIOverlay(vks::UIOverlay *overlay)
